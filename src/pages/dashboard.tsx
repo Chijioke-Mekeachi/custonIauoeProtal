@@ -1,271 +1,19 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { api, bufferToImageUrl, getUserData, processResultsData, getResultsData, processCleanedResults } from '@/lib/api';
+import { useRouter } from 'next/navigation';
+import { api } from '@/lib/api';
 
-// Types
-interface StudentInfo {
-  id: number;
-  MatNo: string;
-  Surname: string;
-  FirstName: string;
-  MiddleName: string;
-  SexName: string;
-  StudentImage: {
-    type: string;
-    data: number[];
-  };
-  FullName: string;
-  Email: string;
-  Telephone: string;
-  FacultyID: number;
-  DepartmentID: number;
-  ELDS: string;
-  DoB: string;
-  HomeAddress: string;
-  CountryID: number;
-  StateID: number;
-  SessionID: number;
-  LevelID: number;
-}
-
-interface FacultyData {
-  status: boolean;
-  message: string;
-  payload: {
-    id: number;
-    FacultyName: string;
-    SubscriberID: string;
-  };
-}
-
-interface DepartmentData {
-  status: boolean;
-  message: string;
-  payload: {
-    id: number;
-    DepartmentName: string;
-    SubscriberID: string;
-  };
-}
-
-interface ResultsData {
-  resultsByLevel: any;
-  gpaData: any;
-  cgpa: string;
-  gradeClass: any;
-  failedCourses: any[];
-}
-
-interface CleanedResultsData {
-  studentInfo: {
-    studentId: number;
-    matricNumber: string;
-  };
-  overall: {
-    cgpa: number;
-    totalCredits: number;
-    totalGradePoints: number;
-  };
-  semesters: Array<{
-    semester: string;
-    session: string;
-    level: string;
-    gpa: number;
-    totalCredits: number;
-    courses: Array<{
-      courseCode: string;
-      courseName: string;
-      grade: string;
-      gradePoint: number;
-      creditUnit: number;
-      totalScore: number;
-      semester: string;
-      session: string;
-      level: string;
-      status: string;
-    }>;
-  }>;
-  resultsByLevel: any;
-  gradeClass: any;
-  failedCourses: any[];
-  rawData: any;
-}
-
-interface CurrentData {
-  name: string;
-  matricNo: string;
-  faculty: string;
-  department: string;
-  email: string;
-  phone: string;
-  session: string;
-  level: string;
-  cgpa: string;
-  grade: string;
-  gender: string;
-  dob: string;
-  address: string;
-  imageUrl: string;
-}
-
-export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState('primary');
-  const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null);
-  const [resultsData, setResultsData] = useState<ResultsData | CleanedResultsData | null>(null);
-  const [facultyData, setFacultyData] = useState<FacultyData | null>(null);
-  const [departmentData, setDepartmentData] = useState<DepartmentData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+export default function Home() {
+  const [formData, setFormData] = useState({
+    matrix: '',
+    password: ''
+  });
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [useCleanApi, setUseCleanApi] = useState(true);
+  const [isHovered, setIsHovered] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  // Helper function to get level name from LevelID
-  const getLevelName = (levelId: number) => {
-    const levels: { [key: number]: string } = {
-      12: "100 Level",
-      11: "200 Level", 
-      10: "300 Level",
-      9: "400 Level",
-      8: "500 Level"
-    };
-    return levels[levelId] || `Level ${levelId}`;
-  };
-
-  // Helper function to get session name from SessionID
-  const getSessionName = (sessionId: number) => {
-    const sessions: { [key: number]: string } = {
-      33: "2023/2024",
-      34: "2024/2025",
-      35: "2025/2026"
-    };
-    return sessions[sessionId] || `Session ${sessionId}`;
-  };
-
-  // Compute currentData from state
-  const userData = getUserData();
-  const currentData: CurrentData = {
-    name: studentInfo?.FullName || userData?.FullName || "CHIJIOKE, Mekelachi",
-    matricNo: studentInfo?.MatNo || userData?.MatNo || "U/2023/30012",
-    faculty: facultyData?.payload?.FacultyName || "NATURAL AND APPLIED SCIENCES",
-    department: departmentData?.payload?.DepartmentName || studentInfo?.ELDS || "COMPUTER SCIENCE",
-    email: studentInfo?.Email || userData?.Email || "mekelachichijioke@gmail.com",
-    phone: studentInfo?.Telephone || userData?.Telephone || "08058004027",
-    session: getSessionName(studentInfo?.SessionID || userData?.SessionID || 34),
-    level: getLevelName(studentInfo?.LevelID || userData?.LevelID || 10),
-    cgpa: resultsData ? (typeof resultsData.cgpa === 'number' ? resultsData.cgpa.toFixed(2) : resultsData.cgpa) : "3.38",
-    grade: resultsData?.gradeClass?.class || "Second Class Lower",
-    gender: studentInfo?.SexName || "MALE",
-    dob: studentInfo?.DoB ? new Date(studentInfo.DoB).toLocaleDateString() : "Apr 16, 2007",
-    address: studentInfo?.HomeAddress || "1 ECHE LUOR CLOSE PORT HARCOURT",
-    imageUrl: studentInfo?.StudentImage ? bufferToImageUrl(studentInfo.StudentImage.data) : ''
-  };
-
-  // Fetch all student data on component mount
-  useEffect(() => {
-    const fetchStudentData = async () => {
-      try {
-        setIsLoading(true);
-        const userData = getUserData();
-        
-        if (userData && userData.UIN) {
-          console.log('Fetching student data for:', userData.UIN);
-          
-          // Fetch student info
-          try {
-            const studentInfoData = await api.getStudentInfo(userData.UIN);
-            setStudentInfo(studentInfoData);
-          } catch (studentError) {
-            console.error('Failed to fetch student info:', studentError);
-            throw new Error('Unable to load student profile information');
-          }
-
-          // Fetch faculty and department names in parallel with better error handling
-          try {
-            const facultyResponse = await api.getFaculty(userData.FacultyID);
-            if (facultyResponse.status && facultyResponse.payload) {
-              setFacultyData(facultyResponse);
-            }
-          } catch (facultyError) {
-            console.warn('Failed to fetch faculty data:', facultyError);
-            // Use default faculty name from currentData
-          }
-
-          try {
-            const departmentResponse = await api.getDepartment(userData.DepartmentID);
-            if (departmentResponse.status && departmentResponse.payload) {
-              setDepartmentData(departmentResponse);
-            }
-          } catch (departmentError) {
-            console.warn('Failed to fetch department data:', departmentError);
-            // Use default department name from currentData
-          }
-
-          // Fetch results data with error handling - using the new clean API
-          try {
-            console.log('Fetching results using clean API...');
-            const results = await getResultsData(userData.id, useCleanApi);
-            setResultsData(results);
-          } catch (resultsError) {
-            console.warn('Failed to fetch results data:', resultsError);
-            // Try fallback to old API
-            try {
-              console.log('Trying fallback to original API...');
-              const resultsData = await api.getStudentResults(userData.id);
-              const processedResults = processResultsData(resultsData);
-              setResultsData(processedResults);
-              setUseCleanApi(false);
-            } catch (fallbackError) {
-              console.warn('Fallback API also failed:', fallbackError);
-              // Continue without results data
-            }
-          }
-
-        } else {
-          setError('No user data found. Please login again.');
-        }
-      } catch (err: any) {
-        console.error('Failed to fetch student data:', err);
-        setError(err.message || 'Failed to load student information. Please try refreshing the page.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchStudentData();
-  }, []);
-
-  // Function to refresh results data
-  const refreshResults = async () => {
-    try {
-      const userData = getUserData();
-      if (userData?.id) {
-        console.log('Refreshing results data...');
-        const results = await getResultsData(userData.id, useCleanApi);
-        setResultsData(results);
-      }
-    } catch (error) {
-      console.error('Failed to refresh results:', error);
-    }
-  };
-
-  // Check if we're using cleaned results data
-  const isCleanedResults = (data: any): data is CleanedResultsData => {
-    return data && data.semesters && Array.isArray(data.semesters);
-  };
-
-  // Get grade color based on grade letter
-  const getGradeColor = (grade: string) => {
-    switch (grade) {
-      case 'A': return 'text-green-400';
-      case 'B': return 'text-blue-400';
-      case 'C': return 'text-yellow-400';
-      case 'D': return 'text-orange-400';
-      case 'E': return 'text-red-300';
-      case 'F': return 'text-red-400';
-      default: return 'text-gray-400';
-    }
-  };
+  const router = useRouter();
 
   // Animated background effect
   useEffect(() => {
@@ -292,6 +40,7 @@ export default function Dashboard() {
       '#ff9ff3', '#54a0ff', '#5f27cd', '#00d2d3', '#ff9f43'
     ];
 
+    // Create particles
     for (let i = 0; i < 50; i++) {
       particles.push({
         x: Math.random() * canvas.width,
@@ -316,6 +65,7 @@ export default function Dashboard() {
         if (particle.y > canvas.height) particle.y = 0;
         if (particle.y < 0) particle.y = canvas.height;
 
+        // Draw particle with gradient
         const gradient = ctx.createRadialGradient(
           particle.x, particle.y, 0,
           particle.x, particle.y, particle.size * 2
@@ -328,6 +78,7 @@ export default function Dashboard() {
         ctx.arc(particle.x, particle.y, particle.size * 2, 0, Math.PI * 2);
         ctx.fill();
 
+        // Connect particles with lines
         particles.slice(index + 1).forEach(otherParticle => {
           const dx = particle.x - otherParticle.x;
           const dy = particle.y - otherParticle.y;
@@ -358,584 +109,207 @@ export default function Dashboard() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen relative flex items-center justify-center bg-gray-900">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-cyan-300">Loading student portal...</p>
-          <p className="text-gray-400 text-sm mt-2">Fetching your academic data</p>
-        </div>
-      </div>
-    );
-  }
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    if (error) setError('');
+  };
 
-  if (error) {
-    return (
-      <div className="min-h-screen relative flex items-center justify-center bg-gray-900">
-        <div className="text-center max-w-md mx-4">
-          <div className="text-red-400 text-4xl mb-4">⚠️</div>
-          <p className="text-red-300 text-lg mb-2">Failed to load dashboard</p>
-          <p className="text-gray-400 mb-6">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-6 py-3 bg-cyan-500 hover:bg-cyan-600 rounded-xl text-white font-semibold transition-colors"
-          >
-            Refresh Page
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+
+    try {
+      // Use our proxy API route instead of direct call
+      const data = await api.login(formData.matrix.toLowerCase(), formData.password);
+
+      if (data.status === true) {
+        // Store tokens and user data
+        localStorage.setItem('access_token', data.payload.token.access_token);
+        localStorage.setItem('refresh_token', data.payload.token.refresh_token);
+        localStorage.setItem('user_data', JSON.stringify(data.payload.user));
+        
+        // Redirect to dashboard
+        router.push('/dashboard');
+      } else {
+        setError(data.message || 'Login failed. Please check your credentials.');
+      }
+      
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(err.message || 'Network error. Please check your connection and try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = () => {
+    console.log('Forgot password flow initiated');
+  };
 
   return (
-    <div className="min-h-screen relative bg-gray-900 overflow-hidden">
+    <div className="min-h-screen relative flex items-center justify-center bg-gray-900 overflow-hidden">
       {/* Animated Background */}
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 w-full h-full"
+      />
+      
+      {/* Animated Grid Overlay */}
       <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-blue-900/10 to-cyan-900/20" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-gray-900 to-gray-900" />
 
-      {/* Header */}
-      <div className="relative z-10">
-        <div className="bg-gray-800/70 backdrop-blur-xl border-b border-gray-700/50">
-          <div className="container mx-auto px-6 py-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-                  IAUOE Student Portal
-                </h1>
-                <p className="text-gray-300 text-sm">Welcome back, {currentData.name}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-cyan-300 font-semibold">{currentData.matricNo}</p>
-                <p className="text-gray-400 text-sm">{currentData.session} • {currentData.level}</p>
+      {/* Main Login Card */}
+      <div className="relative z-10 w-full max-w-md mx-4">
+        {/* Floating AI Orb */}
+        <div className="absolute -top-20 left-1/2 transform -translate-x-1/2">
+          <div className="relative">
+            <div className="w-16 h-16 bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 rounded-full animate-pulse shadow-2xl shadow-cyan-500/50">
+              <div className="absolute inset-2 bg-gray-900 rounded-full animate-spin-slow">
+                <div className="absolute inset-0.5 bg-gradient-to-r from-cyan-400 to-purple-500 rounded-full opacity-75 blur-sm" />
               </div>
             </div>
+            <div className="absolute -inset-4 bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 rounded-full opacity-20 blur-xl animate-pulse" />
           </div>
         </div>
 
-        {/* Main Navigation */}
-        <div className="bg-gray-800/50 backdrop-blur-lg border-b border-gray-700/30">
-          <div className="container mx-auto px-6">
-            <nav className="flex space-x-8 overflow-x-auto">
-              {[
-                { id: 'primary', name: 'Primary Info' },
-                { id: 'courses', name: 'Courses' },
-                { id: 'result', name: 'Results' },
-                { id: 'library', name: 'Library' },
-                { id: 'questions', name: 'Questions' },
-                { id: 'activity', name: 'Activity' },
-                { id: 'password', name: 'Password' }
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`py-4 px-2 border-b-2 font-medium text-sm transition-all duration-300 whitespace-nowrap ${
-                    activeTab === tab.id
-                      ? 'border-cyan-400 text-cyan-300'
-                      : 'border-transparent text-gray-400 hover:text-gray-300'
-                  }`}
-                >
-                  {tab.name}
-                </button>
-              ))}
-            </nav>
-          </div>
-        </div>
-      </div>
+        <div className="bg-gray-800/70 backdrop-blur-xl rounded-3xl border border-gray-700/50 shadow-2xl overflow-hidden">
+          {/* Gradient Border Effect */}
+          <div className="h-1 bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 animate-gradient-x" />
+          
+          <div className="p-8">
+            {/* Header */}
+            <div className="text-center mb-8">
+              <div className="flex justify-center mb-4">
+                <div className="relative">
+                  <h1 className="text-4xl font-bold bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent animate-gradient-x">
+                    Sign in
+                  </h1>
+                  <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 rounded-lg blur opacity-20 animate-pulse" />
+                </div>
+              </div>
+              
+              <h2 className="text-xl font-semibold text-white mb-2">
+                Welcome to <span className="bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">IAUOE Portal</span>
+              </h2>
+              <p className="text-gray-300 text-sm leading-relaxed">
+                Enter your matrix credentials to access the neural network
+              </p>
+            </div>
 
-      {/* Main Content */}
-      <div className="relative z-10 container mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Sidebar */}
-          <div className="lg:col-span-1">
-            <div className="bg-gray-800/70 backdrop-blur-xl rounded-2xl border border-gray-700/50 p-6">
+            {/* Login Form */}
+            <form className="space-y-6" onSubmit={handleSubmit}>
               <div className="space-y-4">
-                <div className="text-center mb-6">
-                  {currentData.imageUrl ? (
-                    <img 
-                      src={currentData.imageUrl} 
-                      alt="Student" 
-                      className="w-20 h-20 rounded-full mx-auto mb-3 object-cover border-2 border-cyan-400"
+                {/* Matrix Input */}
+                <div className="group">
+                  <label htmlFor="matrix" className="block text-sm font-medium text-cyan-300 mb-2 group-focus-within:text-cyan-200 transition-colors">
+                    <span className="flex items-center">
+                      Matriculation Number
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="matrix"
+                      name="matrix"
+                      type="text"
+                      required
+                      value={formData.matrix}
+                      onChange={handleChange}
+                      disabled={isLoading}
+                      className="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-400 transition-all duration-300 backdrop-blur-sm disabled:opacity-50 text-sm"
+                      placeholder="e.g., u/2023/30012"
                     />
+                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-500/10 to-purple-500/10 opacity-0 group-focus-within:opacity-100 transition-opacity duration-300 -z-10" />
+                  </div>
+                </div>
+
+                {/* Password Input */}
+                <div className="group">
+                  <label htmlFor="password" className="block text-sm font-medium text-purple-300 mb-2 group-focus-within:text-purple-200 transition-colors">
+                    <span className="flex items-center">
+                      Password
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="password"
+                      name="password"
+                      type="password"
+                      required
+                      value={formData.password}
+                      onChange={handleChange}
+                      disabled={isLoading}
+                      className="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-400 transition-all duration-300 backdrop-blur-sm disabled:opacity-50 text-sm"
+                      placeholder="Enter your password"
+                    />
+                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-500/10 to-pink-500/10 opacity-0 group-focus-within:opacity-100 transition-opacity duration-300 -z-10" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Error Message */}
+              {error && (
+                <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4 backdrop-blur-sm">
+                  <div className="flex items-center text-red-300 text-sm">
+                    <span className="mr-2">⚠️</span>
+                    {error}
+                  </div>
+                </div>
+              )}
+
+              {/* Sign In Button */}
+              <div className="relative group">
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  onMouseEnter={() => setIsHovered(true)}
+                  onMouseLeave={() => setIsHovered(false)}
+                  className="w-full py-4 px-6 bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 rounded-xl text-white font-semibold text-sm tracking-wider uppercase transform transition-all duration-300 hover:scale-105 hover:shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none group"
+                >
+                  {isLoading ? (
+                    <div className="flex items-center justify-center">
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      <span className="animate-pulse">Authenticating...</span>
+                    </div>
                   ) : (
-                    <div className="w-20 h-20 bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 rounded-full mx-auto mb-3 flex items-center justify-center">
-                      <span className="text-white font-bold text-xl">
-                        {currentData.name.split(',')[0].charAt(0)}
-                      </span>
-                    </div>
+                    <span className="flex items-center justify-center">
+                      Login
+                    </span>
                   )}
-                  <h3 className="text-white font-semibold">{currentData.name}</h3>
-                  <p className="text-cyan-300 text-sm">{currentData.matricNo}</p>
-                  <p className="text-gray-400 text-xs mt-1">{currentData.level}</p>
-                </div>
-
-                {/* Quick Stats */}
-                <div className="space-y-3">
-                  <div className={`bg-gradient-to-br ${resultsData?.gradeClass?.color || 'from-cyan-400 to-purple-400'} rounded-xl p-4 border border-gray-600/30`}>
-                    <p className="text-white text-sm opacity-90">CGPA</p>
-                    <p className="text-2xl font-bold text-white">
-                      {currentData.cgpa}
-                    </p>
-                    <p className="text-white text-sm opacity-90">{currentData.grade}</p>
-                  </div>
-                  
-                  <div className="bg-gray-900/50 rounded-xl p-4 border border-gray-600/30">
-                    <p className="text-gray-400 text-sm">Current Session</p>
-                    <p className="text-white font-semibold">{currentData.session}</p>
-                    <p className="text-gray-300 text-sm">{currentData.level}</p>
-                  </div>
-
-                  {/* Academic Progress */}
-                  <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-xl p-4 border border-purple-500/20">
-                    <p className="text-purple-300 text-sm mb-2">Academic Progress</p>
-                    <div className="w-full bg-gray-700 rounded-full h-2">
-                      <div 
-                        className="bg-gradient-to-r from-purple-400 to-pink-400 h-2 rounded-full transition-all duration-1000"
-                        style={{ 
-                          width: `${(parseFloat(currentData.cgpa) / 5.0) * 100}%` 
-                        }}
-                      ></div>
-                    </div>
-                    <p className="text-gray-300 text-xs mt-2 text-center">
-                      {currentData.cgpa} / 5.0
-                    </p>
-                  </div>
-                </div>
-
-                {/* Contact Info */}
-                <div className="bg-gradient-to-r from-cyan-500/10 to-purple-500/10 rounded-xl p-4 border border-cyan-500/20">
-                  <h4 className="text-cyan-300 font-semibold mb-3 flex items-center">
-                    <span className="mr-2">📧</span>
-                    Contact Info
-                  </h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-start">
-                      <span className="text-cyan-400 mr-2">🏛️</span>
-                      <div>
-                        <p className="text-white font-medium">{currentData.faculty}</p>
-                        <p className="text-gray-300">{currentData.department}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center">
-                      <span className="text-cyan-400 mr-2">📱</span>
-                      <p className="text-gray-300">{currentData.phone}</p>
-                    </div>
-                    <div className="flex items-center">
-                      <span className="text-cyan-400 mr-2">✉️</span>
-                      <p className="text-gray-300 break-all">{currentData.email}</p>
-                    </div>
-                    <div className="flex items-center pt-2 border-t border-cyan-500/20">
-                      <span className="text-purple-400 mr-2">📅</span>
-                      <p className="text-purple-300 text-xs">Active: {currentData.session}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Main Content Area */}
-          <div className="lg:col-span-3">
-            {/* Primary Information */}
-            {activeTab === 'primary' && (
-              <div className="bg-gray-800/70 backdrop-blur-xl rounded-2xl border border-gray-700/50 p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
-                    Primary Information
-                  </h2>
-                  <div className="text-right">
-                    <p className="text-cyan-300 text-sm">Last Updated</p>
-                    <p className="text-gray-400 text-xs">{new Date().toLocaleDateString()}</p>
-                  </div>
-                </div>
+                </button>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Personal Information */}
-                  <div className="bg-gray-900/50 rounded-xl p-6 border border-gray-600/30">
-                    <h3 className="text-lg font-semibold text-cyan-300 mb-4 flex items-center">
-                      <span className="mr-2">👤</span>
-                      Personal Information
-                    </h3>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center border-b border-gray-600/30 pb-3">
-                        <span className="text-gray-400 flex items-center">
-                          <span className="mr-2">🎫</span>
-                          Matric No.
-                        </span>
-                        <span className="text-white font-mono">{currentData.matricNo}</span>
-                      </div>
-                      <div className="flex justify-between items-center border-b border-gray-600/30 pb-3">
-                        <span className="text-gray-400 flex items-center">
-                          <span className="mr-2">⚧️</span>
-                          Gender
-                        </span>
-                        <span className="text-white">{currentData.gender}</span>
-                      </div>
-                      <div className="flex justify-between items-center border-b border-gray-600/30 pb-3">
-                        <span className="text-gray-400 flex items-center">
-                          <span className="mr-2">🎂</span>
-                          Date of Birth
-                        </span>
-                        <span className="text-white">{currentData.dob}</span>
-                      </div>
-                      <div className="flex justify-between items-start">
-                        <span className="text-gray-400 flex items-start">
-                          <span className="mr-2">🏠</span>
-                          Home Address
-                        </span>
-                        <span className="text-white text-right max-w-[200px]">{currentData.address}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Academic Overview */}
-                  <div className="bg-gray-900/50 rounded-xl p-6 border border-gray-600/30">
-                    <h3 className="text-lg font-semibold text-purple-300 mb-4 flex items-center">
-                      <span className="mr-2">🎓</span>
-                      Academic Overview
-                    </h3>
-                    <div className="space-y-4">
-                      <div>
-                        <p className="text-gray-400 text-sm mb-2">Faculty & Department</p>
-                        <div className="bg-gradient-to-r from-cyan-500/10 to-cyan-500/5 rounded-lg p-3 border border-cyan-500/20 mb-2">
-                          <p className="text-cyan-300 text-sm">Faculty</p>
-                          <p className="text-white font-semibold">{currentData.faculty}</p>
-                        </div>
-                        <div className="bg-gradient-to-r from-purple-500/10 to-purple-500/5 rounded-lg p-3 border border-purple-500/20">
-                          <p className="text-purple-300 text-sm">Department</p>
-                          <p className="text-white font-semibold">{currentData.department}</p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-gradient-to-br from-cyan-500/10 to-cyan-500/5 rounded-lg p-3 border border-cyan-500/20">
-                          <p className="text-cyan-300 text-sm">Current Level</p>
-                          <p className="text-white font-semibold">{currentData.level}</p>
-                        </div>
-                        <div className="bg-gradient-to-br from-purple-500/10 to-purple-500/5 rounded-lg p-3 border border-purple-500/20">
-                          <p className="text-purple-300 text-sm">Active Session</p>
-                          <p className="text-white font-semibold">{currentData.session}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quick Actions */}
-                <div className="mt-6 bg-gradient-to-r from-cyan-500/10 to-purple-500/10 rounded-xl p-6 border border-cyan-500/20">
-                  <h3 className="text-lg font-semibold text-cyan-300 mb-4">Quick Actions</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <button 
-                      onClick={() => setActiveTab('courses')}
-                      className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 rounded-lg p-3 border border-cyan-500/30 transition-all duration-300 hover:scale-105"
-                    >
-                      <div className="text-center">
-                        <div className="text-lg mb-1">📚</div>
-                        <p className="text-sm">View Courses</p>
-                      </div>
-                    </button>
-                    <button 
-                      onClick={() => setActiveTab('result')}
-                      className="bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 rounded-lg p-3 border border-purple-500/30 transition-all duration-300 hover:scale-105"
-                    >
-                      <div className="text-center">
-                        <div className="text-lg mb-1">📊</div>
-                        <p className="text-sm">Check Results</p>
-                      </div>
-                    </button>
-                    <button 
-                      onClick={() => setActiveTab('library')}
-                      className="bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 rounded-lg p-3 border border-pink-500/30 transition-all duration-300 hover:scale-105"
-                    >
-                      <div className="text-center">
-                        <div className="text-lg mb-1">🏛️</div>
-                        <p className="text-sm">Library</p>
-                      </div>
-                    </button>
-                    <button 
-                      onClick={() => setActiveTab('password')}
-                      className="bg-green-500/20 hover:bg-green-500/30 text-green-300 rounded-lg p-3 border border-green-500/30 transition-all duration-300 hover:scale-105"
-                    >
-                      <div className="text-center">
-                        <div className="text-lg mb-1">🔐</div>
-                        <p className="text-sm">Password</p>
-                      </div>
-                    </button>
-                  </div>
-                </div>
+                {/* Button Glow Effect */}
+                <div className={`absolute -inset-1 bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 rounded-xl blur opacity-30 transition-opacity duration-300 ${
+                  isHovered && !isLoading ? 'opacity-50' : 'opacity-20'
+                } ${isLoading ? 'animate-pulse' : ''} -z-10`} />
               </div>
-            )}
 
-            {/* Results Tab */}
-            {activeTab === 'result' && (
-              <div className="bg-gray-800/70 backdrop-blur-xl rounded-2xl border border-gray-700/50 p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
-                    Academic Results
-                  </h2>
-                  <div className="flex items-center space-x-4">
-                    {resultsData && (
-                      <div className={`px-4 py-2 rounded-lg bg-gradient-to-r ${resultsData.gradeClass.color} border border-gray-600/30`}>
-                        <p className="text-white font-semibold text-sm">
-                          {typeof resultsData.cgpa === 'number' ? resultsData.cgpa.toFixed(2) : resultsData.cgpa} CGPA
-                        </p>
-                        <p className="text-white text-xs opacity-90">{resultsData.gradeClass.class}</p>
-                      </div>
-                    )}
-                    <button
-                      onClick={refreshResults}
-                      className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 rounded-lg text-white text-sm font-semibold transition-colors flex items-center"
-                    >
-                      <span className="mr-2">🔄</span>
-                      Refresh
-                    </button>
-                  </div>
-                </div>
-
-                {!resultsData ? (
-                  <div className="text-center py-12">
-                    <div className="w-20 h-20 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full mx-auto mb-4 flex items-center justify-center">
-                      <span className="text-white text-2xl">📊</span>
-                    </div>
-                    <p className="text-gray-300 text-lg mb-2">Results Not Available</p>
-                    <p className="text-gray-400 mb-4">Unable to fetch results data at the moment.</p>
-                    <button
-                      onClick={() => window.location.reload()}
-                      className="px-6 py-3 bg-cyan-500 hover:bg-cyan-600 rounded-xl text-white font-semibold transition-colors"
-                    >
-                      Try Again
-                    </button>
-                  </div>
-                ) : isCleanedResults(resultsData) ? (
-                  // Clean Results Display
-                  <>
-                    {/* Overall GPA Summary */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                      {resultsData.semesters.map((semester, index) => (
-                        <div key={index} className="bg-gradient-to-br from-cyan-500/10 to-purple-500/10 rounded-xl p-4 border border-cyan-500/20 hover:scale-105 transition-transform duration-300">
-                          <h3 className="text-cyan-300 font-semibold mb-2 text-sm">{semester.semester}</h3>
-                          <p className="text-2xl font-bold text-white">{semester.gpa.toFixed(2)}</p>
-                          <p className="text-gray-300 text-xs">
-                            {semester.session} • {semester.level}
-                          </p>
-                          <p className="text-gray-400 text-xs mt-1">
-                            {semester.courses.length} courses
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Detailed Results by Semester */}
-                    {resultsData.semesters.map((semester, semesterIndex) => (
-                      <div key={semesterIndex} className="mb-8">
-                        <div className="flex justify-between items-center mb-4 bg-gray-900/50 rounded-lg px-4 py-3 border border-gray-600/30">
-                          <div>
-                            <h3 className="text-xl font-semibold text-cyan-300 flex items-center">
-                              <span className="mr-2">📈</span>
-                              {semester.semester} - {semester.session}
-                            </h3>
-                            <p className="text-gray-300 text-sm">{semester.level}</p>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-cyan-300 font-semibold text-lg">
-                              {semester.gpa.toFixed(2)} GPA
-                            </span>
-                            <p className="text-gray-400 text-xs">
-                              {semester.totalCredits} credits
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <div className="bg-gray-900/50 rounded-lg border border-gray-600/30 overflow-hidden">
-                          <div className="overflow-x-auto">
-                            <table className="w-full">
-                              <thead>
-                                <tr className="border-b border-gray-600/30 bg-gray-800/50">
-                                  <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Course Code</th>
-                                  <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Course Title</th>
-                                  <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Grade</th>
-                                  <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Score</th>
-                                  <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Units</th>
-                                  <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Points</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {semester.courses.map((course, courseIndex) => (
-                                  <tr 
-                                    key={courseIndex} 
-                                    className="border-b border-gray-600/30 hover:bg-gray-700/30 transition-colors duration-200 last:border-0"
-                                  >
-                                    <td className="p-4 text-white text-sm font-mono">{course.courseCode}</td>
-                                    <td className="p-4 text-white text-sm">{course.courseName}</td>
-                                    <td className={`p-4 text-sm font-bold ${getGradeColor(course.grade)}`}>
-                                      {course.grade}
-                                    </td>
-                                    <td className="p-4 text-white text-sm">{course.totalScore || 'N/A'}</td>
-                                    <td className="p-4 text-white text-sm">{course.creditUnit}</td>
-                                    <td className="p-4 text-white text-sm">{course.gradePoint}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-
-                    {/* Failed Courses */}
-                    {resultsData.failedCourses.length > 0 && (
-                      <div className="bg-gradient-to-br from-red-500/10 to-pink-500/10 rounded-xl p-6 border border-red-500/20">
-                        <h3 className="text-lg font-semibold text-red-300 mb-4 flex items-center">
-                          <span className="mr-2">⚠️</span>
-                          Failed Courses ({resultsData.failedCourses.length})
-                        </h3>
-                        <div className="space-y-3">
-                          {resultsData.failedCourses.map((course, index) => (
-                            <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-gray-900/50 rounded-lg border border-red-500/30 hover:bg-red-500/10 transition-colors">
-                              <span className="text-red-300 font-semibold text-sm">{course.code}</span>
-                              <span className="text-white col-span-2 text-sm">{course.title}</span>
-                              <span className="text-gray-400 text-sm">{course.session}</span>
-                              <span className="text-red-400 font-bold text-sm">{course.grade}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  // Original Results Display (fallback)
-                  <>
-                    {/* Overall GPA Summary */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                      {Object.entries(resultsData.gpaData).map(([level, sessionData]: [string, any]) => {
-                        const levelGpas = Object.values(sessionData).flatMap((semesters: any) => 
-                          Object.values(semesters).filter((gpa: any) => gpa !== "0.00")
-                        );
-                        const levelAvg = levelGpas.length > 0 
-                          ? (levelGpas.reduce((a: number, b: string) => a + parseFloat(b), 0) / levelGpas.length).toFixed(2)
-                          : "0.00";
-                        
-                        return (
-                          <div key={level} className="bg-gradient-to-br from-cyan-500/10 to-purple-500/10 rounded-xl p-4 border border-cyan-500/20 hover:scale-105 transition-transform duration-300">
-                            <h3 className="text-cyan-300 font-semibold mb-2 text-sm">{level}</h3>
-                            <p className="text-2xl font-bold text-white">{levelAvg}</p>
-                            <p className="text-gray-300 text-xs">
-                              Average GPA
-                            </p>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Detailed Results by Level */}
-                    {Object.entries(resultsData.resultsByLevel).map(([level, sessions]: [string, any]) => (
-                      <div key={level} className="mb-8">
-                        <h3 className="text-xl font-semibold text-cyan-300 mb-4 flex items-center">
-                          <span className="mr-2">📈</span>
-                          {level} Results
-                        </h3>
-                        
-                        {Object.entries(sessions).map(([session, semesters]: [string, any]) => (
-                          <div key={session} className="mb-6">
-                            <h4 className="text-lg font-semibold text-purple-300 mb-3 bg-purple-500/10 rounded-lg px-4 py-2 border border-purple-500/20">
-                              {session}
-                            </h4>
-                            
-                            {Object.entries(semesters).map(([semester, courses]: [string, any]) => (
-                              <div key={semester} className="mb-6">
-                                <div className="flex justify-between items-center mb-4 bg-gray-900/50 rounded-lg px-4 py-3 border border-gray-600/30">
-                                  <h5 className="text-md font-semibold text-gray-300 flex items-center">
-                                    <span className="mr-2">📅</span>
-                                    {semester}
-                                  </h5>
-                                  <div className="text-right">
-                                    <span className="text-cyan-300 font-semibold text-lg">
-                                      {resultsData.gpaData[level]?.[session]?.[semester] || "0.00"}
-                                    </span>
-                                    <p className="text-gray-400 text-xs">GPA</p>
-                                  </div>
-                                </div>
-                                
-                                <div className="bg-gray-900/50 rounded-lg border border-gray-600/30 overflow-hidden">
-                                  <div className="overflow-x-auto">
-                                    <table className="w-full">
-                                      <thead>
-                                        <tr className="border-b border-gray-600/30 bg-gray-800/50">
-                                          <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Course Code</th>
-                                          <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Course Title</th>
-                                          <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Grade</th>
-                                          <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Score</th>
-                                          <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Units</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {(courses as any[]).map((course, index) => (
-                                          <tr 
-                                            key={index} 
-                                            className="border-b border-gray-600/30 hover:bg-gray-700/30 transition-colors duration-200 last:border-0"
-                                          >
-                                            <td className="p-4 text-white text-sm font-mono">{course.courseCode}</td>
-                                            <td className="p-4 text-white text-sm">{course.courseName}</td>
-                                            <td className={`p-4 text-sm font-bold ${getGradeColor(course.Grade)}`}>
-                                              {course.Grade}
-                                            </td>
-                                            <td className="p-4 text-white text-sm">{course.TotalScores || 'N/A'}</td>
-                                            <td className="p-4 text-white text-sm">{course.creditUnits}</td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-
-                    {/* Failed Courses */}
-                    {resultsData.failedCourses.length > 0 && (
-                      <div className="bg-gradient-to-br from-red-500/10 to-pink-500/10 rounded-xl p-6 border border-red-500/20">
-                        <h3 className="text-lg font-semibold text-red-300 mb-4 flex items-center">
-                          <span className="mr-2">⚠️</span>
-                          Failed Courses ({resultsData.failedCourses.length})
-                        </h3>
-                        <div className="space-y-3">
-                          {resultsData.failedCourses.map((course, index) => (
-                            <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-gray-900/50 rounded-lg border border-red-500/30 hover:bg-red-500/10 transition-colors">
-                              <span className="text-red-300 font-semibold text-sm">{course.code}</span>
-                              <span className="text-white col-span-2 text-sm">{course.title}</span>
-                              <span className="text-gray-400 text-sm">{course.session}</span>
-                              <span className="text-red-400 font-bold text-sm">{course.grade}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
+              {/* Forgot Password */}
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={isLoading}
+                  className="text-sm bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent hover:from-cyan-300 hover:to-purple-300 transition-all duration-300 disabled:opacity-30"
+                >
+                  <span className="flex items-center justify-center">
+                    Forgot Password
+                  </span>
+                </button>
               </div>
-            )}
-
-            {/* Other tabs */}
-            {!['primary', 'result'].includes(activeTab) && (
-              <div className="bg-gray-800/70 backdrop-blur-xl rounded-2xl border border-gray-700/50 p-6">
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent mb-6">
-                  {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Section
-                </h2>
-                <div className="text-center py-12">
-                  <div className="w-20 h-20 bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 rounded-full mx-auto mb-4 flex items-center justify-center">
-                    <span className="text-white text-2xl">⚡</span>
-                  </div>
-                  <p className="text-gray-300 text-lg mb-2">
-                    {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Portal
-                  </p>
-                  <p className="text-gray-400">This section is currently under development</p>
-                </div>
-              </div>
-            )}
+            </form>
           </div>
+        </div>
+
+        {/* Footer */}
+        <div className="text-center mt-6">
+          <p className="text-gray-400 text-xs">
+            Powered by <span className="bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">JudeX</span>
+          </p>
         </div>
       </div>
 
