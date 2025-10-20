@@ -49,15 +49,22 @@ interface DepartmentData {
   };
 }
 
-interface ResultsData {
-  resultsByLevel: any;
-  gpaData: any;
-  cgpa: string;
-  gradeClass: any;
+// Common interface for both result types
+interface BaseResultsData {
+  gradeClass: {
+    class: string;
+    color: string;
+  };
   failedCourses: any[];
 }
 
-interface CleanedResultsData {
+interface ResultsData extends BaseResultsData {
+  resultsByLevel: any;
+  gpaData: any;
+  cgpa: string;
+}
+
+interface CleanedResultsData extends BaseResultsData {
   studentInfo: {
     studentId: number;
     matricNumber: string;
@@ -87,8 +94,6 @@ interface CleanedResultsData {
     }>;
   }>;
   resultsByLevel: any;
-  gradeClass: any;
-  failedCourses: any[];
   rawData: any;
 }
 
@@ -142,6 +147,25 @@ export default function Dashboard() {
     return sessions[sessionId] || `Session ${sessionId}`;
   };
 
+  // Helper function to get CGPA from results data
+  const getCgpaFromResults = (data: ResultsData | CleanedResultsData | null): string => {
+    if (!data) return "3.38";
+    
+    // Check if it's cleaned results data
+    if ('overall' in data) {
+      return data.overall.cgpa.toFixed(2);
+    }
+    
+    // It's original results data
+    return data.cgpa;
+  };
+
+  // Helper function to get grade class from results data
+  const getGradeClassFromResults = (data: ResultsData | CleanedResultsData | null) => {
+    if (!data) return { class: "Second Class Lower", color: "from-purple-400 to-indigo-500" };
+    return data.gradeClass;
+  };
+
   // Compute currentData from state
   const userData = getUserData();
   const currentData: CurrentData = {
@@ -153,8 +177,8 @@ export default function Dashboard() {
     phone: studentInfo?.Telephone || userData?.Telephone || "08058004027",
     session: getSessionName(studentInfo?.SessionID || userData?.SessionID || 34),
     level: getLevelName(studentInfo?.LevelID || userData?.LevelID || 10),
-    cgpa: resultsData ? (typeof resultsData.cgpa === 'number' ? resultsData.cgpa.toFixed(2) : resultsData.cgpa) : "3.38",
-    grade: resultsData?.gradeClass?.class || "Second Class Lower",
+    cgpa: getCgpaFromResults(resultsData),
+    grade: getGradeClassFromResults(resultsData).class,
     gender: studentInfo?.SexName || "MALE",
     dob: studentInfo?.DoB ? new Date(studentInfo.DoB).toLocaleDateString() : "Apr 16, 2007",
     address: studentInfo?.HomeAddress || "1 ECHE LUOR CLOSE PORT HARCOURT",
@@ -250,8 +274,8 @@ export default function Dashboard() {
   };
 
   // Check if we're using cleaned results data
-  const isCleanedResults = (data: any): data is CleanedResultsData => {
-    return data && data.semesters && Array.isArray(data.semesters);
+  const isCleanedResults = (data: ResultsData | CleanedResultsData): data is CleanedResultsData => {
+    return 'overall' in data;
   };
 
   // Get grade color based on grade letter
@@ -264,6 +288,15 @@ export default function Dashboard() {
       case 'E': return 'text-red-300';
       case 'F': return 'text-red-400';
       default: return 'text-gray-400';
+    }
+  };
+
+  // Get CGPA display text for results header
+  const getCgpaDisplay = (data: ResultsData | CleanedResultsData) => {
+    if (isCleanedResults(data)) {
+      return `${data.overall.cgpa.toFixed(2)} CGPA`;
+    } else {
+      return `${data.cgpa} CGPA`;
     }
   };
 
@@ -472,7 +505,10 @@ export default function Dashboard() {
 
                 {/* Quick Stats */}
                 <div className="space-y-3">
-                  <div className={`bg-gradient-to-br ${resultsData?.gradeClass?.color || 'from-cyan-400 to-purple-400'} rounded-xl p-4 border border-gray-600/30`}>
+                  <div className={`bg-gradient-to-br ${currentData.grade.includes('First') ? 'from-green-400 to-emerald-500' : 
+                    currentData.grade.includes('Second Class Upper') ? 'from-blue-400 to-cyan-500' :
+                    currentData.grade.includes('Second Class Lower') ? 'from-purple-400 to-indigo-500' :
+                    currentData.grade.includes('Third') ? 'from-orange-400 to-amber-500' : 'from-red-400 to-pink-500'} rounded-xl p-4 border border-gray-600/30`}>
                     <p className="text-white text-sm opacity-90">CGPA</p>
                     <p className="text-2xl font-bold text-white">
                       {currentData.cgpa}
@@ -677,7 +713,7 @@ export default function Dashboard() {
                     {resultsData && (
                       <div className={`px-4 py-2 rounded-lg bg-gradient-to-r ${resultsData.gradeClass.color} border border-gray-600/30`}>
                         <p className="text-white font-semibold text-sm">
-                          {typeof resultsData.cgpa === 'number' ? resultsData.cgpa.toFixed(2) : resultsData.cgpa} CGPA
+                          {getCgpaDisplay(resultsData)}
                         </p>
                         <p className="text-white text-xs opacity-90">{resultsData.gradeClass.class}</p>
                       </div>
