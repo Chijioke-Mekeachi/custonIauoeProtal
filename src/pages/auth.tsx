@@ -153,6 +153,11 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen relative flex items-center justify-center bg-gray-900 overflow-hidden">
+<head>
+  <title>Login</title>
+  <link rel="icon" type="image/png" href="images.jpeg" />
+</head>
+
       {/* Animated Background */}
       <canvas
         ref={canvasRef}
