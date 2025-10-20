@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 
-export default function Home() {
+export default function LoginPage() {
   const [formData, setFormData] = useState({
     matrix: '',
     password: ''

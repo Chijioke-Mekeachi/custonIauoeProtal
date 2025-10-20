@@ -226,7 +226,7 @@ export default function LoginPage() {
                       onChange={handleChange}
                       disabled={isLoading}
                       className="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-400 transition-all duration-300 backdrop-blur-sm disabled:opacity-50 text-sm"
-                      placeholder="e.g., u/2023/30012"
+                      placeholder="e.g., u/xxxx/xxxx"
                     />
                     <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-500/10 to-purple-500/10 opacity-0 group-focus-within:opacity-100 transition-opacity duration-300 -z-10" />
                   </div>
