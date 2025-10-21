@@ -2,6 +2,9 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { api, bufferToImageUrl, getUserData, processResultsData, getResultsData, processCleanedResults } from '@/lib/api';
+import { GameCenter } from './components/games';
+
+// Then in your tab rendering:
 
 // Types
 interface StudentInfo {
@@ -130,7 +133,8 @@ interface CurrentData {
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('primary');
   const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null);
-  const [resultsData, setResultsData] = useState<AllResultsData | null>(null);
+  // const [resultsData, setResultsData] = useState<AllResultsData | null>(null);
+  const [resultsData, setResultsData] = useState<any>(null);
   const [facultyData, setFacultyData] = useState<FacultyData | null>(null);
   const [departmentData, setDepartmentData] = useState<DepartmentData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -187,19 +191,19 @@ export default function Dashboard() {
   // Compute currentData from state
   const userData = getUserData();
   const currentData: CurrentData = {
-    name: studentInfo?.FullName || userData?.FullName || "CHIJIOKE, Mekelachi",
-    matricNo: studentInfo?.MatNo || userData?.MatNo || "U/2023/30012",
+    name: studentInfo?.FullName || userData?.FullName || "Test User",
+    matricNo: studentInfo?.MatNo || userData?.MatNo || "U/***/***",
     faculty: facultyData?.payload?.FacultyName || "NATURAL AND APPLIED SCIENCES",
     department: departmentData?.payload?.DepartmentName || studentInfo?.ELDS || "COMPUTER SCIENCE",
-    email: studentInfo?.Email || userData?.Email || "mekelachichijioke@gmail.com",
-    phone: studentInfo?.Telephone || userData?.Telephone || "08058004027",
+    email: studentInfo?.Email || userData?.Email || "RandomGmail.com",
+    phone: studentInfo?.Telephone || userData?.Telephone || "+234*******",
     session: getSessionName(studentInfo?.SessionID || userData?.SessionID || 34),
     level: getLevelName(studentInfo?.LevelID || userData?.LevelID || 10),
     cgpa: getCgpaFromResults(resultsData),
     grade: getGradeClassFromResults(resultsData).class,
     gender: studentInfo?.SexName || "MALE",
-    dob: studentInfo?.DoB ? new Date(studentInfo.DoB).toLocaleDateString() : "Apr 16, 2007",
-    address: studentInfo?.HomeAddress || "1 ECHE LUOR CLOSE PORT HARCOURT",
+    dob: studentInfo?.DoB ? new Date(studentInfo.DoB).toLocaleDateString() : "Jun 20, 2005",
+    address: studentInfo?.HomeAddress || "PORT HARCOURT",
     imageUrl: studentInfo?.StudentImage ? bufferToImageUrl(studentInfo.StudentImage.data) : ''
   };
 
@@ -341,10 +345,17 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {resultsData.semesters.map((semester, index) => (
               <div key={index} className="bg-gradient-to-br from-cyan-500/10 to-purple-500/10 rounded-xl p-4 border border-cyan-500/20 hover:scale-105 transition-transform duration-300">
-                <h3 className="text-cyan-300 font-semibold mb-2 text-sm">{semester.semester}</h3>
+                <h3 className="text-cyan-300 font-semibold mb-2 text-sm">
+                  {(() => {
+                    const semNum = semester.semester.substring(9, 10);
+                    const suffix = semNum === '1' ? 'st' : semNum === '2' ? 'nd' : semNum === '3' ? 'rd' : 'th';
+                    return `${semester.semester.substring(9,10)}${suffix} ${semester.semester.substring(0,9)} `;
+                  })()}
+                </h3>
+
                 <p className="text-2xl font-bold text-white">{semester.gpa.toFixed(2)}</p>
                 <p className="text-gray-300 text-xs">
-                  {semester.session} • {semester.level}
+                  {semester.session} • {semester.level}00
                 </p>
                 <p className="text-gray-400 text-xs mt-1">
                   {semester.courses.length} courses
@@ -358,11 +369,14 @@ export default function Dashboard() {
             <div key={semesterIndex} className="mb-8">
               <div className="flex justify-between items-center mb-4 bg-gray-900/50 rounded-lg px-4 py-3 border border-gray-600/30">
                 <div>
-                  <h3 className="text-xl font-semibold text-cyan-300 flex items-center">
-                    <span className="mr-2">📈</span>
-                    {semester.semester} - {semester.session}
-                  </h3>
-                  <p className="text-gray-300 text-sm">{semester.level}</p>
+                  <h3 className="text-cyan-300 font-semibold mb-2 text-xl">
+                  {(() => {
+                    const semNum = semester.semester.substring(9, 10);
+                    const suffix = semNum === '1' ? 'st' : semNum === '2' ? 'nd' : semNum === '3' ? 'rd' : 'th';
+                    return `${semester.semester.substring(9,10)}${suffix} ${semester.semester.substring(0,9)} `;
+                  })()}
+                </h3>
+                  <p className="text-gray-300 text-sm">Level {semester.level}00</p>
                 </div>
                 <div className="text-right">
                   <span className="text-cyan-300 font-semibold text-lg">
@@ -494,25 +508,45 @@ export default function Dashboard() {
         <>
           {/* Overall GPA Summary */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            {Object.entries(resultsData.gpaData).map(([level, sessionData]: [string, any]) => {
-              const levelGpas = Object.values(sessionData).flatMap((semesters: any) => 
-                Object.values(semesters).filter((gpa: any) => gpa !== "0.00")
-              );
-              const levelAvg = levelGpas.length > 0 
-                ? (levelGpas.reduce((a: number, b: string) => a + parseFloat(b), 0) / levelGpas.length).toFixed(2)
-                : "0.00";
-              
-              return (
-                <div key={level} className="bg-gradient-to-br from-cyan-500/10 to-purple-500/10 rounded-xl p-4 border border-cyan-500/20 hover:scale-105 transition-transform duration-300">
-                  <h3 className="text-cyan-300 font-semibold mb-2 text-sm">{level}</h3>
-                  <p className="text-2xl font-bold text-white">{levelAvg}</p>
-                  <p className="text-gray-300 text-xs">
-                    Average GPA
-                  </p>
-                </div>
-              );
-            })}
-          </div>
+  {Object.entries(resultsData.gpaData as Record<string, unknown>).map(
+    ([level, sessionData]: [string, unknown]) => {
+      // Ensure sessionData is an object
+      if (typeof sessionData !== "object" || sessionData === null) return null;
+
+      // Flatten semester GPAs and ensure each value is a string or number
+      const levelGpas: number[] = Object.values(sessionData)
+        .flatMap((semesters) =>
+          typeof semesters === "object" && semesters !== null
+            ? Object.values(semesters)
+            : []
+        )
+        .filter((gpa): gpa is string | number => {
+          const val = typeof gpa === "number" ? gpa.toString() : gpa;
+          return typeof val === "string" && val.trim() !== "" && val !== "0.00";
+        })
+        .map((gpa) => parseFloat(String(gpa)))
+        .filter((n) => !isNaN(n));
+
+      // Compute level average GPA safely
+      const levelAvg: string =
+        levelGpas.length > 0
+          ? (levelGpas.reduce((sum, value) => sum + value, 0) / levelGpas.length).toFixed(2)
+          : "0.00";
+
+      return (
+        <div
+          key={level}
+          className="bg-gradient-to-br from-cyan-500/10 to-purple-500/10 rounded-xl p-4 border border-cyan-500/20 hover:scale-105 transition-transform duration-300"
+        >
+          <h3 className="text-cyan-300 font-semibold mb-2 text-sm">{level}</h3>
+          <p className="text-2xl font-bold text-white">{levelAvg}</p>
+          <p className="text-gray-300 text-xs">Average GPA</p>
+        </div>
+      );
+    }
+  )}
+</div>
+
 
           {/* Detailed Results by Level */}
           {Object.entries(resultsData.resultsByLevel).map(([level, sessions]: [string, any]) => (
@@ -742,8 +776,8 @@ export default function Dashboard() {
                 { id: 'result', name: 'Results' },
                 { id: 'library', name: 'Library' },
                 { id: 'questions', name: 'Questions' },
-                { id: 'activity', name: 'Activity' },
-                { id: 'password', name: 'Password' }
+                { id: 'games', name: 'Games' },
+                { id: 'password', name: 'Password' },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -1039,24 +1073,43 @@ export default function Dashboard() {
                           Failed Courses ({resultsData.failedCourses.length})
                         </h3>
                         <div className="space-y-3">
-                          {resultsData.failedCourses.map((course, index) => (
-                            <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-gray-900/50 rounded-lg border border-red-500/30 hover:bg-red-500/10 transition-colors">
-                              <span className="text-red-300 font-semibold text-sm">{course.code}</span>
-                              <span className="text-white col-span-2 text-sm">{course.title}</span>
-                              <span className="text-gray-400 text-sm">{course.session}</span>
-                              <span className="text-red-400 font-bold text-sm">{course.grade}</span>
-                            </div>
-                          ))}
+                            {Array.isArray(resultsData?.failedCourses) && resultsData.failedCourses.length > 0 ? (
+                              resultsData.failedCourses.map(
+                                (
+                                  course: {
+                                    code: string;
+                                    title: string;
+                                    session: string;
+                                    grade: string;
+                                  },
+                                  index: number
+                                ) => (
+                                  <div
+                                    key={index}
+                                    className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-gray-900/50 rounded-lg border border-red-500/30 hover:bg-red-500/10 transition-colors"
+                                  >
+                                    <span className="text-red-300 font-semibold text-sm">{course.code}</span>
+                                    <span className="text-white col-span-2 text-sm">{course.title}</span>
+                                    <span className="text-gray-400 text-sm">{course.session}</span>
+                                    <span className="text-red-400 font-bold text-sm">{course.grade}</span>
+                                  </div>
+                                )
+                              )
+                            ) : (
+                              <p className="text-gray-400 text-sm italic">No failed courses 🎉</p>
+                            )}
                         </div>
-                      </div>
+
+                        </div>
                     )}
                   </>
                 )}
               </div>
             )}
+            {activeTab === 'games' && <GameCenter />}
 
             {/* Other tabs */}
-            {!['primary', 'result'].includes(activeTab) && (
+            {!['primary', 'result','games'].includes(activeTab) && (
               <div className="bg-gray-800/70 backdrop-blur-xl rounded-2xl border border-gray-700/50 p-6">
                 <h2 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent mb-6">
                   {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Section

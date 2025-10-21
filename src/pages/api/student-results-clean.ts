@@ -130,11 +130,17 @@ function processStudentResults(rawData: any): StudentResults {
     levelMap.set(level.id, level.LevelName);
   });
 
-  // Process each result
-  const allResults: CleanResult[] = [];
-  const semesterMap = new Map();
+  // Create session lookup for proper sorting
+  const sessionMap = new Map();
+  sessions.data.forEach((session: any) => {
+    sessionMap.set(session.id, session.SessionName);
+  });
 
-  studentResult.forEach((result: any) => {
+  // Process each result and handle duplicates by keeping the last occurrence
+  const courseLastOccurrence = new Map();
+  
+  // First pass: identify the last occurrence of each course
+  studentResult.forEach((result: any, index: number) => {
     const courseInfo = courseMap.get(result.CourseID);
     
     if (!courseInfo) {
@@ -142,31 +148,61 @@ function processStudentResults(rawData: any): StudentResults {
       return;
     }
 
-    const levelName = levelMap.get(result.LevelID) || `Level ${result.LevelID}`;
-    const semesterKey = `${result.SessionID}-${result.SemesterID}`;
-    const semesterName = `Semester ${result.SemesterID}`;
+    // Use course code as key to track duplicates
+    const courseKey = courseInfo.code;
+    courseLastOccurrence.set(courseKey, index);
+  });
+
+  // Second pass: collect only the last occurrence of each course
+  const uniqueResults: CleanResult[] = [];
+  const processedCourses = new Set();
+  
+  // Process in reverse order to easily get the last occurrence
+  for (let i = studentResult.length - 1; i >= 0; i--) {
+    const result = studentResult[i];
+    const courseInfo = courseMap.get(result.CourseID);
     
-    const cleanResult: CleanResult = {
-      courseCode: courseInfo.code,
-      courseName: courseInfo.name,
-      grade: result.Grade,
-      gradePoint: GRADE_POINTS[result.Grade] || 0,
-      creditUnit: courseInfo.credits,
-      totalScore: result.TotalScores || 0,
-      semester: semesterName,
-      session: result.SessionName,
-      level: levelName,
-      status: result.FinalApprovalStatus
-    };
+    if (!courseInfo) continue;
 
-    allResults.push(cleanResult);
-
-    // Group by semester
-    if (!semesterMap.has(semesterKey)) {
-      semesterMap.set(semesterKey, {
+    const courseKey = courseInfo.code;
+    
+    // If we haven't processed this course yet, and this is its last occurrence
+    if (!processedCourses.has(courseKey) && courseLastOccurrence.get(courseKey) === i) {
+      const levelName = levelMap.get(result.LevelID) || `Level ${result.LevelID}`;
+      const semesterName = `Semester ${result.SemesterID}`;
+      
+      const cleanResult: CleanResult = {
+        courseCode: courseInfo.code,
+        courseName: courseInfo.name,
+        grade: result.Grade,
+        gradePoint: GRADE_POINTS[result.Grade] || 0,
+        creditUnit: courseInfo.credits,
+        totalScore: result.TotalScores || 0,
         semester: semesterName,
         session: result.SessionName,
         level: levelName,
+        status: result.FinalApprovalStatus
+      };
+
+      uniqueResults.push(cleanResult);
+      processedCourses.add(courseKey);
+    }
+  }
+
+  // Reverse back to maintain chronological order (oldest to newest)
+  uniqueResults.reverse();
+
+  // Group by semester
+  const semesterMap = new Map();
+  
+  uniqueResults.forEach((cleanResult: CleanResult) => {
+    const semesterKey = `${cleanResult.session}-${cleanResult.semester}`;
+    
+    if (!semesterMap.has(semesterKey)) {
+      semesterMap.set(semesterKey, {
+        semester: cleanResult.semester,
+        session: cleanResult.session,
+        level: cleanResult.level,
         courses: []
       });
     }
@@ -203,7 +239,7 @@ function processStudentResults(rawData: any): StudentResults {
     totalGradePoints += semesterGradePoints;
   });
 
-  // Sort semesters by session and semester
+  // Sort semesters by session and semester (newest first)
   semesters.sort((a, b) => {
     const sessionCompare = b.session.localeCompare(a.session);
     if (sessionCompare !== 0) return sessionCompare;
@@ -221,6 +257,6 @@ function processStudentResults(rawData: any): StudentResults {
       cgpa: parseFloat(cgpa.toFixed(2))
     },
     semesters,
-    allResults
+    allResults: uniqueResults
   };
 }

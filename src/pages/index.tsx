@@ -3,6 +3,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+// export { default as GameCenter } from './Components/GameCenter';
+// export { default as MemoryGame } from './components/MemoryGame';
+// export { default as TypingGame } from './TypingGame';
+// export { default as ReactionGame } from './ReactionGame';
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({
