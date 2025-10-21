@@ -97,6 +97,19 @@ interface CleanedResultsData extends BaseResultsData {
   rawData: any;
 }
 
+interface SimpleResultsData extends BaseResultsData {
+  studentInfo: {
+    matricNumber: string;
+    totalCourses: number;
+    totalCredits: number;
+    cgpa: number;
+  };
+  resultsBySession: any;
+  allResults: any[];
+}
+
+type AllResultsData = ResultsData | CleanedResultsData | SimpleResultsData;
+
 interface CurrentData {
   name: string;
   matricNo: string;
@@ -117,7 +130,7 @@ interface CurrentData {
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('primary');
   const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null);
-  const [resultsData, setResultsData] = useState<ResultsData | CleanedResultsData | null>(null);
+  const [resultsData, setResultsData] = useState<AllResultsData | null>(null);
   const [facultyData, setFacultyData] = useState<FacultyData | null>(null);
   const [departmentData, setDepartmentData] = useState<DepartmentData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -148,7 +161,7 @@ export default function Dashboard() {
   };
 
   // Helper function to get CGPA from results data
-  const getCgpaFromResults = (data: ResultsData | CleanedResultsData | null): string => {
+  const getCgpaFromResults = (data: AllResultsData | null): string => {
     if (!data) return "3.38";
     
     // Check if it's cleaned results data
@@ -156,12 +169,17 @@ export default function Dashboard() {
       return data.overall.cgpa.toFixed(2);
     }
     
+    // Check if it's simple results data
+    if ('studentInfo' in data && 'cgpa' in data.studentInfo) {
+      return data.studentInfo.cgpa.toFixed(2);
+    }
+    
     // It's original results data
-    return data.cgpa;
+    return (data as ResultsData).cgpa;
   };
 
   // Helper function to get grade class from results data
-  const getGradeClassFromResults = (data: ResultsData | CleanedResultsData | null) => {
+  const getGradeClassFromResults = (data: AllResultsData | null) => {
     if (!data) return { class: "Second Class Lower", color: "from-purple-400 to-indigo-500" };
     return data.gradeClass;
   };
@@ -229,7 +247,7 @@ export default function Dashboard() {
           try {
             console.log('Fetching results using clean API...');
             const results = await getResultsData(userData.id, useCleanApi);
-            setResultsData(results);
+            setResultsData(results as AllResultsData);
           } catch (resultsError) {
             console.warn('Failed to fetch results data:', resultsError);
             // Try fallback to old API
@@ -237,7 +255,7 @@ export default function Dashboard() {
               console.log('Trying fallback to original API...');
               const resultsData = await api.getStudentResults(userData.id);
               const processedResults = processResultsData(resultsData);
-              setResultsData(processedResults);
+              setResultsData(processedResults as AllResultsData);
               setUseCleanApi(false);
             } catch (fallbackError) {
               console.warn('Fallback API also failed:', fallbackError);
@@ -266,7 +284,7 @@ export default function Dashboard() {
       if (userData?.id) {
         console.log('Refreshing results data...');
         const results = await getResultsData(userData.id, useCleanApi);
-        setResultsData(results);
+        setResultsData(results as AllResultsData);
       }
     } catch (error) {
       console.error('Failed to refresh results:', error);
@@ -274,8 +292,18 @@ export default function Dashboard() {
   };
 
   // Check if we're using cleaned results data
-  const isCleanedResults = (data: ResultsData | CleanedResultsData): data is CleanedResultsData => {
-    return 'overall' in data;
+  const isCleanedResults = (data: AllResultsData): data is CleanedResultsData => {
+    return 'overall' in data && 'semesters' in data;
+  };
+
+  // Check if we're using simple results data
+  const isSimpleResults = (data: AllResultsData): data is SimpleResultsData => {
+    return 'resultsBySession' in data && 'allResults' in data;
+  };
+
+  // Check if we're using original results data
+  const isOriginalResults = (data: AllResultsData): data is ResultsData => {
+    return 'gpaData' in data && 'resultsByLevel' in data;
   };
 
   // Get grade color based on grade letter
@@ -292,11 +320,268 @@ export default function Dashboard() {
   };
 
   // Get CGPA display text for results header
-  const getCgpaDisplay = (data: ResultsData | CleanedResultsData) => {
+  const getCgpaDisplay = (data: AllResultsData) => {
     if (isCleanedResults(data)) {
       return `${data.overall.cgpa.toFixed(2)} CGPA`;
+    } else if (isSimpleResults(data)) {
+      return `${data.studentInfo.cgpa.toFixed(2)} CGPA`;
     } else {
       return `${data.cgpa} CGPA`;
+    }
+  };
+
+  // Render results based on data type
+  const renderResultsContent = () => {
+    if (!resultsData) return null;
+
+    if (isCleanedResults(resultsData)) {
+      return (
+        <>
+          {/* Overall GPA Summary */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            {resultsData.semesters.map((semester, index) => (
+              <div key={index} className="bg-gradient-to-br from-cyan-500/10 to-purple-500/10 rounded-xl p-4 border border-cyan-500/20 hover:scale-105 transition-transform duration-300">
+                <h3 className="text-cyan-300 font-semibold mb-2 text-sm">{semester.semester}</h3>
+                <p className="text-2xl font-bold text-white">{semester.gpa.toFixed(2)}</p>
+                <p className="text-gray-300 text-xs">
+                  {semester.session} • {semester.level}
+                </p>
+                <p className="text-gray-400 text-xs mt-1">
+                  {semester.courses.length} courses
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {/* Detailed Results by Semester */}
+          {resultsData.semesters.map((semester, semesterIndex) => (
+            <div key={semesterIndex} className="mb-8">
+              <div className="flex justify-between items-center mb-4 bg-gray-900/50 rounded-lg px-4 py-3 border border-gray-600/30">
+                <div>
+                  <h3 className="text-xl font-semibold text-cyan-300 flex items-center">
+                    <span className="mr-2">📈</span>
+                    {semester.semester} - {semester.session}
+                  </h3>
+                  <p className="text-gray-300 text-sm">{semester.level}</p>
+                </div>
+                <div className="text-right">
+                  <span className="text-cyan-300 font-semibold text-lg">
+                    {semester.gpa.toFixed(2)} GPA
+                  </span>
+                  <p className="text-gray-400 text-xs">
+                    {semester.totalCredits} credits
+                  </p>
+                </div>
+              </div>
+              
+              <div className="bg-gray-900/50 rounded-lg border border-gray-600/30 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-600/30 bg-gray-800/50">
+                        <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Course Code</th>
+                        <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Course Title</th>
+                        <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Grade</th>
+                        <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Score</th>
+                        <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Units</th>
+                        <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Points</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {semester.courses.map((course, courseIndex) => (
+                        <tr 
+                          key={courseIndex} 
+                          className="border-b border-gray-600/30 hover:bg-gray-700/30 transition-colors duration-200 last:border-0"
+                        >
+                          <td className="p-4 text-white text-sm font-mono">{course.courseCode}</td>
+                          <td className="p-4 text-white text-sm">{course.courseName}</td>
+                          <td className={`p-4 text-sm font-bold ${getGradeColor(course.grade)}`}>
+                            {course.grade}
+                          </td>
+                          <td className="p-4 text-white text-sm">{course.totalScore || 'N/A'}</td>
+                          <td className="p-4 text-white text-sm">{course.creditUnit}</td>
+                          <td className="p-4 text-white text-sm">{course.gradePoint}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          ))}
+        </>
+      );
+    } else if (isSimpleResults(resultsData)) {
+      return (
+        <>
+          {/* Overall GPA Summary */}
+          <div className="bg-gradient-to-br from-cyan-500/10 to-purple-500/10 rounded-xl p-6 border border-cyan-500/20 mb-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center">
+                <p className="text-cyan-300 text-sm">CGPA</p>
+                <p className="text-2xl font-bold text-white">{resultsData.studentInfo.cgpa.toFixed(2)}</p>
+              </div>
+              <div className="text-center">
+                <p className="text-purple-300 text-sm">Total Credits</p>
+                <p className="text-2xl font-bold text-white">{resultsData.studentInfo.totalCredits}</p>
+              </div>
+              <div className="text-center">
+                <p className="text-green-300 text-sm">Courses</p>
+                <p className="text-2xl font-bold text-white">{resultsData.studentInfo.totalCourses}</p>
+              </div>
+              <div className="text-center">
+                <p className="text-yellow-300 text-sm">Level</p>
+                <p className="text-2xl font-bold text-white">{currentData.level}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Results by Session */}
+          {Object.entries(resultsData.resultsBySession).map(([session, semesters]: [string, any]) => (
+            <div key={session} className="mb-8">
+              <h3 className="text-xl font-semibold text-cyan-300 mb-4 flex items-center">
+                <span className="mr-2">📅</span>
+                {session}
+              </h3>
+              
+              {Object.entries(semesters).map(([semester, courses]: [string, any]) => (
+                <div key={semester} className="mb-6">
+                  <div className="flex justify-between items-center mb-4 bg-gray-900/50 rounded-lg px-4 py-3 border border-gray-600/30">
+                    <h4 className="text-lg font-semibold text-purple-300">{semester}</h4>
+                    <p className="text-gray-400 text-sm">{courses.length} courses</p>
+                  </div>
+                  
+                  <div className="bg-gray-900/50 rounded-lg border border-gray-600/30 overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-gray-600/30 bg-gray-800/50">
+                            <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Course Code</th>
+                            <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Course Title</th>
+                            <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Grade</th>
+                            <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Score</th>
+                            <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Units</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(courses as any[]).map((course, index) => (
+                            <tr 
+                              key={index} 
+                              className="border-b border-gray-600/30 hover:bg-gray-700/30 transition-colors duration-200 last:border-0"
+                            >
+                              <td className="p-4 text-white text-sm font-mono">{course.courseCode}</td>
+                              <td className="p-4 text-white text-sm">{course.courseName}</td>
+                              <td className={`p-4 text-sm font-bold ${getGradeColor(course.grade)}`}>
+                                {course.grade}
+                              </td>
+                              <td className="p-4 text-white text-sm">{course.score || 'N/A'}</td>
+                              <td className="p-4 text-white text-sm">{course.creditUnit}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </>
+      );
+    } else {
+      // Original Results Display
+      return (
+        <>
+          {/* Overall GPA Summary */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            {Object.entries(resultsData.gpaData).map(([level, sessionData]: [string, any]) => {
+              const levelGpas = Object.values(sessionData).flatMap((semesters: any) => 
+                Object.values(semesters).filter((gpa: any) => gpa !== "0.00")
+              );
+              const levelAvg = levelGpas.length > 0 
+                ? (levelGpas.reduce((a: number, b: string) => a + parseFloat(b), 0) / levelGpas.length).toFixed(2)
+                : "0.00";
+              
+              return (
+                <div key={level} className="bg-gradient-to-br from-cyan-500/10 to-purple-500/10 rounded-xl p-4 border border-cyan-500/20 hover:scale-105 transition-transform duration-300">
+                  <h3 className="text-cyan-300 font-semibold mb-2 text-sm">{level}</h3>
+                  <p className="text-2xl font-bold text-white">{levelAvg}</p>
+                  <p className="text-gray-300 text-xs">
+                    Average GPA
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Detailed Results by Level */}
+          {Object.entries(resultsData.resultsByLevel).map(([level, sessions]: [string, any]) => (
+            <div key={level} className="mb-8">
+              <h3 className="text-xl font-semibold text-cyan-300 mb-4 flex items-center">
+                <span className="mr-2">📈</span>
+                {level} Results
+              </h3>
+              
+              {Object.entries(sessions).map(([session, semesters]: [string, any]) => (
+                <div key={session} className="mb-6">
+                  <h4 className="text-lg font-semibold text-purple-300 mb-3 bg-purple-500/10 rounded-lg px-4 py-2 border border-purple-500/20">
+                    {session}
+                  </h4>
+                  
+                  {Object.entries(semesters).map(([semester, courses]: [string, any]) => (
+                    <div key={semester} className="mb-6">
+                      <div className="flex justify-between items-center mb-4 bg-gray-900/50 rounded-lg px-4 py-3 border border-gray-600/30">
+                        <h5 className="text-md font-semibold text-gray-300 flex items-center">
+                          <span className="mr-2">📅</span>
+                          {semester}
+                        </h5>
+                        <div className="text-right">
+                          <span className="text-cyan-300 font-semibold text-lg">
+                            {resultsData.gpaData[level]?.[session]?.[semester] || "0.00"}
+                          </span>
+                          <p className="text-gray-400 text-xs">GPA</p>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-gray-900/50 rounded-lg border border-gray-600/30 overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="border-b border-gray-600/30 bg-gray-800/50">
+                                <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Course Code</th>
+                                <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Course Title</th>
+                                <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Grade</th>
+                                <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Score</th>
+                                <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Units</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(courses as any[]).map((course, index) => (
+                                <tr 
+                                  key={index} 
+                                  className="border-b border-gray-600/30 hover:bg-gray-700/30 transition-colors duration-200 last:border-0"
+                                >
+                                  <td className="p-4 text-white text-sm font-mono">{course.courseCode}</td>
+                                  <td className="p-4 text-white text-sm">{course.courseName}</td>
+                                  <td className={`p-4 text-sm font-bold ${getGradeColor(course.Grade)}`}>
+                                    {course.Grade}
+                                  </td>
+                                  <td className="p-4 text-white text-sm">{course.TotalScores || 'N/A'}</td>
+                                  <td className="p-4 text-white text-sm">{course.creditUnits}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          ))}
+        </>
+      );
     }
   };
 
@@ -742,197 +1027,13 @@ export default function Dashboard() {
                       Try Again
                     </button>
                   </div>
-                ) : isCleanedResults(resultsData) ? (
-                  // Clean Results Display
-                  <>
-                    {/* Overall GPA Summary */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                      {resultsData.semesters.map((semester, index) => (
-                        <div key={index} className="bg-gradient-to-br from-cyan-500/10 to-purple-500/10 rounded-xl p-4 border border-cyan-500/20 hover:scale-105 transition-transform duration-300">
-                          <h3 className="text-cyan-300 font-semibold mb-2 text-sm">{semester.semester}</h3>
-                          <p className="text-2xl font-bold text-white">{semester.gpa.toFixed(2)}</p>
-                          <p className="text-gray-300 text-xs">
-                            {semester.session} • {semester.level}
-                          </p>
-                          <p className="text-gray-400 text-xs mt-1">
-                            {semester.courses.length} courses
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Detailed Results by Semester */}
-                    {resultsData.semesters.map((semester, semesterIndex) => (
-                      <div key={semesterIndex} className="mb-8">
-                        <div className="flex justify-between items-center mb-4 bg-gray-900/50 rounded-lg px-4 py-3 border border-gray-600/30">
-                          <div>
-                            <h3 className="text-xl font-semibold text-cyan-300 flex items-center">
-                              <span className="mr-2">📈</span>
-                              {semester.semester} - {semester.session}
-                            </h3>
-                            <p className="text-gray-300 text-sm">{semester.level}</p>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-cyan-300 font-semibold text-lg">
-                              {semester.gpa.toFixed(2)} GPA
-                            </span>
-                            <p className="text-gray-400 text-xs">
-                              {semester.totalCredits} credits
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <div className="bg-gray-900/50 rounded-lg border border-gray-600/30 overflow-hidden">
-                          <div className="overflow-x-auto">
-                            <table className="w-full">
-                              <thead>
-                                <tr className="border-b border-gray-600/30 bg-gray-800/50">
-                                  <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Course Code</th>
-                                  <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Course Title</th>
-                                  <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Grade</th>
-                                  <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Score</th>
-                                  <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Units</th>
-                                  <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Points</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {semester.courses.map((course, courseIndex) => (
-                                  <tr 
-                                    key={courseIndex} 
-                                    className="border-b border-gray-600/30 hover:bg-gray-700/30 transition-colors duration-200 last:border-0"
-                                  >
-                                    <td className="p-4 text-white text-sm font-mono">{course.courseCode}</td>
-                                    <td className="p-4 text-white text-sm">{course.courseName}</td>
-                                    <td className={`p-4 text-sm font-bold ${getGradeColor(course.grade)}`}>
-                                      {course.grade}
-                                    </td>
-                                    <td className="p-4 text-white text-sm">{course.totalScore || 'N/A'}</td>
-                                    <td className="p-4 text-white text-sm">{course.creditUnit}</td>
-                                    <td className="p-4 text-white text-sm">{course.gradePoint}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-
-                    {/* Failed Courses */}
-                    {resultsData.failedCourses.length > 0 && (
-                      <div className="bg-gradient-to-br from-red-500/10 to-pink-500/10 rounded-xl p-6 border border-red-500/20">
-                        <h3 className="text-lg font-semibold text-red-300 mb-4 flex items-center">
-                          <span className="mr-2">⚠️</span>
-                          Failed Courses ({resultsData.failedCourses.length})
-                        </h3>
-                        <div className="space-y-3">
-                          {resultsData.failedCourses.map((course, index) => (
-                            <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-gray-900/50 rounded-lg border border-red-500/30 hover:bg-red-500/10 transition-colors">
-                              <span className="text-red-300 font-semibold text-sm">{course.code}</span>
-                              <span className="text-white col-span-2 text-sm">{course.title}</span>
-                              <span className="text-gray-400 text-sm">{course.session}</span>
-                              <span className="text-red-400 font-bold text-sm">{course.grade}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
                 ) : (
-                  // Original Results Display (fallback)
                   <>
-                    {/* Overall GPA Summary */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                      {Object.entries(resultsData.gpaData).map(([level, sessionData]: [string, any]) => {
-                        const levelGpas = Object.values(sessionData).flatMap((semesters: any) => 
-                          Object.values(semesters).filter((gpa: any) => gpa !== "0.00")
-                        );
-                        const levelAvg = levelGpas.length > 0 
-                          ? (levelGpas.reduce((a: number, b: string) => a + parseFloat(b), 0) / levelGpas.length).toFixed(2)
-                          : "0.00";
-                        
-                        return (
-                          <div key={level} className="bg-gradient-to-br from-cyan-500/10 to-purple-500/10 rounded-xl p-4 border border-cyan-500/20 hover:scale-105 transition-transform duration-300">
-                            <h3 className="text-cyan-300 font-semibold mb-2 text-sm">{level}</h3>
-                            <p className="text-2xl font-bold text-white">{levelAvg}</p>
-                            <p className="text-gray-300 text-xs">
-                              Average GPA
-                            </p>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    {renderResultsContent()}
 
-                    {/* Detailed Results by Level */}
-                    {Object.entries(resultsData.resultsByLevel).map(([level, sessions]: [string, any]) => (
-                      <div key={level} className="mb-8">
-                        <h3 className="text-xl font-semibold text-cyan-300 mb-4 flex items-center">
-                          <span className="mr-2">📈</span>
-                          {level} Results
-                        </h3>
-                        
-                        {Object.entries(sessions).map(([session, semesters]: [string, any]) => (
-                          <div key={session} className="mb-6">
-                            <h4 className="text-lg font-semibold text-purple-300 mb-3 bg-purple-500/10 rounded-lg px-4 py-2 border border-purple-500/20">
-                              {session}
-                            </h4>
-                            
-                            {Object.entries(semesters).map(([semester, courses]: [string, any]) => (
-                              <div key={semester} className="mb-6">
-                                <div className="flex justify-between items-center mb-4 bg-gray-900/50 rounded-lg px-4 py-3 border border-gray-600/30">
-                                  <h5 className="text-md font-semibold text-gray-300 flex items-center">
-                                    <span className="mr-2">📅</span>
-                                    {semester}
-                                  </h5>
-                                  <div className="text-right">
-                                    <span className="text-cyan-300 font-semibold text-lg">
-                                      {resultsData.gpaData[level]?.[session]?.[semester] || "0.00"}
-                                    </span>
-                                    <p className="text-gray-400 text-xs">GPA</p>
-                                  </div>
-                                </div>
-                                
-                                <div className="bg-gray-900/50 rounded-lg border border-gray-600/30 overflow-hidden">
-                                  <div className="overflow-x-auto">
-                                    <table className="w-full">
-                                      <thead>
-                                        <tr className="border-b border-gray-600/30 bg-gray-800/50">
-                                          <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Course Code</th>
-                                          <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Course Title</th>
-                                          <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Grade</th>
-                                          <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Score</th>
-                                          <th className="text-left p-4 text-cyan-300 text-sm font-semibold">Units</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {(courses as any[]).map((course, index) => (
-                                          <tr 
-                                            key={index} 
-                                            className="border-b border-gray-600/30 hover:bg-gray-700/30 transition-colors duration-200 last:border-0"
-                                          >
-                                            <td className="p-4 text-white text-sm font-mono">{course.courseCode}</td>
-                                            <td className="p-4 text-white text-sm">{course.courseName}</td>
-                                            <td className={`p-4 text-sm font-bold ${getGradeColor(course.Grade)}`}>
-                                              {course.Grade}
-                                            </td>
-                                            <td className="p-4 text-white text-sm">{course.TotalScores || 'N/A'}</td>
-                                            <td className="p-4 text-white text-sm">{course.creditUnits}</td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-
-                    {/* Failed Courses */}
+                    {/* Failed Courses - Common for all data types */}
                     {resultsData.failedCourses.length > 0 && (
-                      <div className="bg-gradient-to-br from-red-500/10 to-pink-500/10 rounded-xl p-6 border border-red-500/20">
+                      <div className="bg-gradient-to-br from-red-500/10 to-pink-500/10 rounded-xl p-6 border border-red-500/20 mt-8">
                         <h3 className="text-lg font-semibold text-red-300 mb-4 flex items-center">
                           <span className="mr-2">⚠️</span>
                           Failed Courses ({resultsData.failedCourses.length})
