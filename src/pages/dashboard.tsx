@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { api, bufferToImageUrl, getUserData, processResultsData, getResultsData, processCleanedResults } from '@/lib/api';
-import { GameCenter } from './components/games';
+import { GameCenter } from '../components/games';
 
 // Then in your tab rendering:
 
