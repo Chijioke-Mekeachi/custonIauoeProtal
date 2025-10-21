@@ -18,7 +18,7 @@ const ProgrammingSandbox: React.FC<ProgrammingGameProps> = ({ onBack, onScoreUpd
   const programmingChallenges = [
     {
       id: 1,
-      title: "Create a Counter App",
+      title: "Welcome page",
       description: "Build a simple counter that increments when a button is clicked",
       html: `<!-- Create a counter display and button -->\n<div id="counter-app">\n  <h2>Counter: <span id="count">0</span></h2>\n  <button id="increment-btn">Increment</button>\n</div>`,
       css: `/* Style your counter */\n#counter-app {\n  text-align: center;\n  padding: 20px;\n}\n\nbutton {\n  padding: 10px 20px;\n  background: #4f46e5;\n  color: white;\n  border: none;\n  border-radius: 5px;\n  cursor: pointer;\n}`,
