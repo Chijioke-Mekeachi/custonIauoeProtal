@@ -154,6 +154,48 @@ export default function Dashboard() {
     router.push('/');
   };
 
+  // Helper function to get CGPA color gradient based on value
+  const getCgpaGradient = (cgpa: string) => {
+    const cgpaValue = parseFloat(cgpa);
+    
+    if (cgpaValue >= 4.5) {
+      return 'from-yellow-400 to-yellow-600'; // Gold for excellent
+    } else if (cgpaValue >= 4.0) {
+      return 'from-green-400 to-emerald-600'; // Green for very good
+    } else if (cgpaValue >= 3.5) {
+      return 'from-blue-400 to-cyan-600'; // Blue for good
+    } else if (cgpaValue >= 3.0) {
+      return 'from-purple-400 to-indigo-600'; // Purple for average
+    } else if (cgpaValue >= 2.5) {
+      return 'from-orange-400 to-amber-600'; // Orange for below average
+    } else if (cgpaValue >= 2.0) {
+      return 'from-red-400 to-orange-600'; // Red-orange for poor
+    } else {
+      return 'from-red-600 to-red-800'; // Dark red for very poor
+    }
+  };
+
+  // Helper function to get linear gradient colors based on CGPA
+  const getCgpaLinearGradient = (cgpa: string) => {
+    const cgpaValue = parseFloat(cgpa);
+    
+    if (cgpaValue >= 4.5) {
+      return 'linear-gradient(135deg, #fbbf24, #d97706)'; // Gold gradient
+    } else if (cgpaValue >= 4.0) {
+      return 'linear-gradient(135deg, #34d399, #059669)'; // Emerald gradient
+    } else if (cgpaValue >= 3.5) {
+      return 'linear-gradient(135deg, #60a5fa, #0891b2)'; // Blue to cyan
+    } else if (cgpaValue >= 3.0) {
+      return 'linear-gradient(135deg, #a78bfa, #4f46e5)'; // Purple to indigo
+    } else if (cgpaValue >= 2.5) {
+      return 'linear-gradient(135deg, #fb923c, #d97706)'; // Orange to amber
+    } else if (cgpaValue >= 2.0) {
+      return 'linear-gradient(135deg, #f87171, #ea580c)'; // Red to orange
+    } else {
+      return 'linear-gradient(135deg, #dc2626, #991b1b)'; // Dark red
+    }
+  };
+
   // Helper function to get level name from LevelID
   const getLevelName = (levelId: number) => {
     const levels: { [key: number]: string } = {
@@ -843,15 +885,18 @@ export default function Dashboard() {
 
                 {/* Quick Stats */}
                 <div className="space-y-3">
-                  <div className={`bg-gradient-to-br ${currentData.grade.includes('First') ? 'from-green-400 to-emerald-500' : 
-                    currentData.grade.includes('Second Class Upper') ? 'from-blue-400 to-cyan-500' :
-                    currentData.grade.includes('Second Class Lower') ? 'from-purple-400 to-indigo-500' :
-                    currentData.grade.includes('Third') ? 'from-orange-400 to-amber-500' : 'from-red-400 to-pink-500'} rounded-xl p-4 border border-gray-600/30`}>
-                    <p className="text-white text-sm opacity-90">CGPA</p>
-                    <p className="text-2xl font-bold text-white">
+                  {/* Dynamic CGPA Card with Gradient */}
+                  <div 
+                    className={`bg-gradient-to-br ${getCgpaGradient(currentData.cgpa)} rounded-xl p-4 border border-gray-600/30 shadow-lg`}
+                    style={{
+                      background: getCgpaLinearGradient(currentData.cgpa)
+                    }}
+                  >
+                    <p className="text-white text-sm opacity-90 font-medium">CGPA</p>
+                    <p className="text-2xl font-bold text-white drop-shadow-lg">
                       {currentData.cgpa}
                     </p>
-                    <p className="text-white text-sm opacity-90">{currentData.grade}</p>
+                    <p className="text-white text-sm opacity-90 font-medium">{currentData.grade}</p>
                   </div>
                   
                   <div className="bg-gray-900/50 rounded-xl p-4 border border-gray-600/30">
@@ -860,14 +905,20 @@ export default function Dashboard() {
                     <p className="text-gray-300 text-sm">{currentData.level}</p>
                   </div>
 
-                  {/* Academic Progress */}
-                  <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-xl p-4 border border-purple-500/20">
-                    <p className="text-purple-300 text-sm mb-2">Academic Progress</p>
+                  {/* Academic Progress with dynamic color */}
+                  <div 
+                    className="rounded-xl p-4 border border-gray-600/30"
+                    style={{
+                      background: `linear-gradient(135deg, rgba(255,255,255,0.1) 0%, ${getCgpaLinearGradient(currentData.cgpa).replace('linear-gradient(135deg, ', '').split(',')[0]},0.2) 100%)`
+                    }}
+                  >
+                    <p className="text-cyan-300 text-sm mb-2">Academic Progress</p>
                     <div className="w-full bg-gray-700 rounded-full h-2">
                       <div 
-                        className="bg-gradient-to-r from-purple-400 to-pink-400 h-2 rounded-full transition-all duration-1000"
+                        className="h-2 rounded-full transition-all duration-1000"
                         style={{ 
-                          width: `${(parseFloat(currentData.cgpa) / 5.0) * 100}%` 
+                          width: `${(parseFloat(currentData.cgpa) / 5.0) * 100}%`,
+                          background: getCgpaLinearGradient(currentData.cgpa)
                         }}
                       ></div>
                     </div>
@@ -934,28 +985,24 @@ export default function Dashboard() {
                     <div className="space-y-4">
                       <div className="flex justify-between items-center border-b border-gray-600/30 pb-3">
                         <span className="text-gray-400 flex items-center">
-                          
                           Matric No.
                         </span>
                         <span className="text-white font-mono">{currentData.matricNo}</span>
                       </div>
                       <div className="flex justify-between items-center border-b border-gray-600/30 pb-3">
                         <span className="text-gray-400 flex items-center">
-                        
                           Gender
                         </span>
                         <span className="text-white">{currentData.gender}</span>
                       </div>
                       <div className="flex justify-between items-center border-b border-gray-600/30 pb-3">
                         <span className="text-gray-400 flex items-center">
-                        
                           Date of Birth
                         </span>
                         <span className="text-white">{currentData.dob}</span>
                       </div>
                       <div className="flex justify-between items-start">
                         <span className="text-gray-400 flex items-start">
-                          
                           Home Address
                         </span>
                         <span className="text-white text-right max-w-[200px]">{currentData.address}</span>
@@ -1049,7 +1096,12 @@ export default function Dashboard() {
                   </h2>
                   <div className="flex items-center space-x-4">
                     {resultsData && (
-                      <div className={`px-4 py-2 rounded-lg bg-gradient-to-r ${resultsData.gradeClass.color} border border-gray-600/30`}>
+                      <div 
+                        className="px-4 py-2 rounded-lg border border-gray-600/30 shadow-lg"
+                        style={{
+                          background: getCgpaLinearGradient(currentData.cgpa)
+                        }}
+                      >
                         <p className="text-white font-semibold text-sm">
                           {getCgpaDisplay(resultsData)}
                         </p>
