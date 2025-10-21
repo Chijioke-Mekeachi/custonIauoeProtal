@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { api, bufferToImageUrl, getUserData, processResultsData, getResultsData, processCleanedResults } from '@/lib/api';
 import { GameCenter } from '../components/games';
 
@@ -141,6 +142,17 @@ export default function Dashboard() {
   const [error, setError] = useState('');
   const [useCleanApi, setUseCleanApi] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const router = useRouter();
+
+  // Logout function
+  const handleLogout = () => {
+    // Clear user data from localStorage or sessionStorage if needed
+    localStorage.removeItem('userData'); // Adjust based on your storage method
+    sessionStorage.removeItem('userData');
+    
+    // Redirect to home page
+    router.push('/');
+  };
 
   // Helper function to get level name from LevelID
   const getLevelName = (levelId: number) => {
@@ -761,6 +773,13 @@ export default function Dashboard() {
               <div className="text-right">
                 <p className="text-cyan-300 font-semibold">{currentData.matricNo}</p>
                 <p className="text-gray-400 text-sm">{currentData.session} • {currentData.level}</p>
+                {/* Logout Button */}
+                <button
+                  onClick={handleLogout}
+                  className="mt-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-white text-sm font-semibold transition-colors flex items-center"
+                >
+                  Logout
+                </button>
               </div>
             </div>
           </div>
@@ -915,28 +934,28 @@ export default function Dashboard() {
                     <div className="space-y-4">
                       <div className="flex justify-between items-center border-b border-gray-600/30 pb-3">
                         <span className="text-gray-400 flex items-center">
-                          <span className="mr-2">🎫</span>
+                          
                           Matric No.
                         </span>
                         <span className="text-white font-mono">{currentData.matricNo}</span>
                       </div>
                       <div className="flex justify-between items-center border-b border-gray-600/30 pb-3">
                         <span className="text-gray-400 flex items-center">
-                          <span className="mr-2">⚧️</span>
+                        
                           Gender
                         </span>
                         <span className="text-white">{currentData.gender}</span>
                       </div>
                       <div className="flex justify-between items-center border-b border-gray-600/30 pb-3">
                         <span className="text-gray-400 flex items-center">
-                          <span className="mr-2">🎂</span>
+                        
                           Date of Birth
                         </span>
                         <span className="text-white">{currentData.dob}</span>
                       </div>
                       <div className="flex justify-between items-start">
                         <span className="text-gray-400 flex items-start">
-                          <span className="mr-2">🏠</span>
+                          
                           Home Address
                         </span>
                         <span className="text-white text-right max-w-[200px]">{currentData.address}</span>
